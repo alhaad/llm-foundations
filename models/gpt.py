@@ -1,10 +1,10 @@
 from flax import nnx
 import jax
 import jax.numpy as jnp
+import functools
 
 class SelfAttentionHead(nnx.Module):
     def __init__(self, n_embed, head_dim, rngs: nnx.Rngs):
-        self.rngs = rngs
         self.query = nnx.Linear(n_embed, head_dim, rngs=rngs, use_bias=False)
         self.key = nnx.Linear(n_embed, head_dim, rngs=rngs, use_bias=False)
         self.value = nnx.Linear(n_embed, head_dim, rngs=rngs, use_bias=False)
@@ -25,7 +25,6 @@ class SelfAttentionHead(nnx.Module):
     
 class MultiHeadAttention(nnx.Module):
     def __init__(self, n_embed, n_head, head_dim, rngs: nnx.Rngs):
-        self.rngs = rngs
         self.heads = [SelfAttentionHead(n_embed, head_dim, rngs) for _ in range(n_head)]
         self.proj = nnx.Linear(n_embed, n_embed, rngs=rngs)
 
@@ -35,7 +34,6 @@ class MultiHeadAttention(nnx.Module):
     
 class FeedForward(nnx.Module):
     def __init__(self, n_embed, rngs: nnx.Rngs):
-        self.rngs = rngs
         self.fc1 = nnx.Linear(n_embed, 4 * n_embed, rngs=rngs)
         self.fc2 = nnx.Linear(4 * n_embed, n_embed, rngs=rngs)
     
@@ -44,7 +42,6 @@ class FeedForward(nnx.Module):
 
 class Block(nnx.Module):
     def __init__(self, n_embed, n_head, rngs: nnx.Rngs):
-        self.rngs = rngs
         self.sa_heads = MultiHeadAttention(n_embed, n_head, n_embed // n_head, rngs=rngs)
         self.ffwd = FeedForward(n_embed, rngs=rngs)
         self.ln1 = nnx.LayerNorm(n_embed, rngs=rngs)
@@ -57,7 +54,6 @@ class Block(nnx.Module):
 
 class GPT(nnx.Module):
     def __init__(self, block_size, vocab_size, n_embed, n_head, n_blocks, rngs: nnx.Rngs):
-        self.rngs = rngs
         self.block_size = block_size
         self.token_embedding_table = nnx.Embed(num_embeddings=vocab_size, features=n_embed, rngs=rngs)
         self.position_embedding_table = nnx.Embed(num_embeddings=self.block_size, features=n_embed, rngs=rngs)
@@ -70,10 +66,3 @@ class GPT(nnx.Module):
         x = self.blocks(x)
         logits = self.lm_head(x)
         return logits
-    
-    def generate(self, x, length):
-        for i in range(length):
-            logits = self(x[:, -self.block_size:])
-            next_token = jax.random.categorical(self.rngs.next(), logits[:, -1])
-            x = jnp.concatenate([x, next_token[:, None]], axis=1)
-        return x

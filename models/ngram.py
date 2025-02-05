@@ -4,7 +4,7 @@ import jax.numpy as jnp
 
 class Lookback(nnx.Module):
     def __init__(self, rngs: nnx.Rngs):
-        self.rngs = rngs
+        pass
     
     def __call__(self, x):
         B, T, C = x.shape
@@ -17,7 +17,6 @@ class Lookback(nnx.Module):
 class NgramLanguageModel(nnx.Module):
     def __init__(self, block_size, vocab_size, n_embed, rngs: nnx.Rngs):
         self.block_size = block_size
-        self.rngs = rngs
         self.token_embedding_table = nnx.Embed(num_embeddings=vocab_size, features=n_embed, rngs=rngs)
         self.position_embedding_table = nnx.Embed(num_embeddings=block_size, features=n_embed, rngs=rngs)
         self.lookback = Lookback(rngs)
@@ -29,10 +28,3 @@ class NgramLanguageModel(nnx.Module):
         x = self.lookback(x)
         logits = self.lm_head(x)
         return logits
-    
-    def generate(self, x, length):
-        for i in range(length):
-            logits = self(x[:, -self.block_size:])
-            next_token = jax.random.categorical(self.rngs.next(), logits[:, -1])
-            x = jnp.concatenate([x, next_token[:, None]], axis=1)
-        return x

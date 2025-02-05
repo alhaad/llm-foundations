@@ -17,7 +17,7 @@ n_blocks = 4
 # Prepare data
 with open('notebooks/data/tinyshakespeare') as f:
     text = f.read()
-vocab = list(set(text))
+vocab = sorted(list(set(text)))
 itos = {i:s for i,s in enumerate(vocab)}
 stoi = {s:i for i,s in enumerate(vocab)}
 encode = lambda x: [stoi[s] for s in x]
@@ -36,8 +36,7 @@ def get_batch(data, key):
     return x, y
 
 # Random number genration
-# Using old NumPy compatible PRNGKey() instead of key() as checkpointing is not supported for key().
-key = jax.random.PRNGKey(seed)
+key = jax.random.key(seed)
 rngs = nnx.Rngs(key)
 
 # Model
@@ -80,7 +79,7 @@ for i in tqdm.trange(10000):
     key, subkey = jax.random.split(key)
     xb, yb = get_batch(train_data, subkey)
     state = train_step(graphdef, state, xb, yb)
-model, optimizer = nnx.merge(graphdef, state)
+nnx.update((model, optimizer), state)
 
 train_xb, train_yb = get_batch(train_data, key)
 print(loss_fn(model, train_xb, train_yb))
@@ -91,9 +90,8 @@ print(loss_fn(model, val_xb, val_yb))
 # Save model
 import orbax.checkpoint as ocp
 import os
-ckpt_dir = ocp.test_utils.erase_and_create_empty(os.getcwd() + '/out/tinyshakespeare-gpt')
+ckpt_dir = ocp.test_utils.erase_and_create_empty(os.getcwd() + '/out/tinyshakespeare-gpt/')
+_, state = nnx.split(model)
 checkpointer = ocp.StandardCheckpointer()
 checkpointer.save(ckpt_dir / 'state', state)
-
-# Generation
-#print([decode(row.tolist()) for row in model.generate(jnp.zeros((1, 1), dtype=jnp.int32), 500)][0])
+checkpointer.wait_until_finished()
