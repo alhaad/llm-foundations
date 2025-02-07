@@ -9,19 +9,30 @@ import tqdm
 seed = 1337
 batch_size = 32
 block_size = 8
-vocab_size = 65
 n_embed = 32
 n_head = 4
 n_blocks = 4
 
+
 # Prepare data
 with open('notebooks/data/tinyshakespeare') as f:
     text = f.read()
-vocab = sorted(list(set(text)))
-itos = {i:s for i,s in enumerate(vocab)}
-stoi = {s:i for i,s in enumerate(vocab)}
-encode = lambda x: [stoi[s] for s in x]
-decode = lambda x: ''.join([itos[i] for i in x])
+
+# Tokenzier
+import sentencepiece as spm
+spm.SentencePieceTrainer.train(input='notebooks/data/tinyshakespeare',
+                               model_prefix='out/shakespeare_tokenizer_model',
+                               vocab_size=1000,
+                               character_coverage=1.0,
+                               model_type='unigram',
+                               remove_extra_whitespaces=False,
+                               user_defined_symbols=["\n", "\r"])
+
+sp = spm.SentencePieceProcessor()
+sp.load('out/shakespeare_tokenizer_model.model')
+vocab_size = sp.get_piece_size()
+encode, decode = sp.encode, sp.decode
+
 data = jnp.array(encode(text), dtype=jnp.int32)
 train_data = data[: int(.9 * len(data))]
 val_data = data[int(.9 * len(data)):]

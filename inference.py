@@ -8,7 +8,6 @@ from flax import nnx
 seed = 1337
 batch_size = 32
 block_size = 8
-vocab_size = 65
 n_embed = 32
 n_head = 4
 n_blocks = 4
@@ -16,11 +15,13 @@ n_blocks = 4
 # Prepare data
 with open('notebooks/data/tinyshakespeare') as f:
     text = f.read()
-vocab = sorted(list(set(text)))
-itos = {i:s for i,s in enumerate(vocab)}
-stoi = {s:i for i,s in enumerate(vocab)}
-encode = lambda x: [stoi[s] for s in x]
-decode = lambda x: ''.join([itos[i] for i in x])
+
+# Tokenzier
+import sentencepiece as spm
+sp = spm.SentencePieceProcessor()
+sp.load('out/shakespeare_tokenizer_model.model')
+vocab_size = sp.get_piece_size()
+encode, decode = sp.encode, sp.decode
 
 from models.gpt import GPT
 abstract_model = nnx.eval_shape(lambda: GPT(block_size, vocab_size, n_embed, n_head, n_blocks, rngs=nnx.Rngs(seed)))
