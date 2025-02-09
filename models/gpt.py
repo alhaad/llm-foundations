@@ -58,11 +58,12 @@ class GPT(nnx.Module):
         self.token_embedding_table = nnx.Embed(num_embeddings=vocab_size, features=n_embed, rngs=rngs)
         self.position_embedding_table = nnx.Embed(num_embeddings=self.block_size, features=n_embed, rngs=rngs)
         self.blocks = nnx.Sequential(*[Block(n_embed, n_head, rngs) for _ in range(n_blocks)])
-        self.lm_head = nnx.Linear(n_embed, vocab_size, rngs=rngs)
+        # lm_head is tied to token_embedding_table.
+
 
     def __call__(self, x):
         B, T = x.shape
         x = self.token_embedding_table(x) + self.position_embedding_table(jnp.arange(T))
         x = self.blocks(x)
-        logits = self.lm_head(x)
+        logits = self.token_embedding_table.attend(x)
         return logits
