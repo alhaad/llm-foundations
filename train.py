@@ -77,20 +77,21 @@ def loss_fn(model, x, targets):
 
 # The code below is a workaround for the slow training code above.
 optimizer = nnx.Optimizer(model, optax.adamw(1e-3))
-graphdef, state = nnx.split((model, optimizer))
+metrics = nnx.MultiMetric(loss=nnx.metrics.Average('loss'))
+graphdef, state = nnx.split((model, optimizer, metrics))
 @jax.jit
 def train_step(graphdef, state, xb, yb):
-    model, optimizer = nnx.merge(graphdef, state)
+    model, optimizer, metrics = nnx.merge(graphdef, state)
     grads = (nnx.grad(loss_fn))(model, xb, yb)
     optimizer.update(grads)
-    _, state = nnx.split((model, optimizer))
+    _, state = nnx.split((model, optimizer, metrics))
     return state
 
 for i in tqdm.trange(10000):
     key, subkey = jax.random.split(key)
     xb, yb = get_batch(train_data, subkey)
     state = train_step(graphdef, state, xb, yb)
-nnx.update((model, optimizer), state)
+nnx.update((model, optimizer, metrics), state)
 
 train_xb, train_yb = get_batch(train_data, key)
 print(loss_fn(model, train_xb, train_yb))
