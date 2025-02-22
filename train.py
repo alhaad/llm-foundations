@@ -33,18 +33,18 @@ sp.load('out/shakespeare_tokenizer_model.model')
 vocab_size = sp.get_piece_size()
 encode, decode = sp.encode, sp.decode
 
-data = jnp.array(encode(text), dtype=jnp.int32)
+data = encode(text)
 train_data = data[: int(.9 * len(data))]
 val_data = data[int(.9 * len(data)):]
 
 # Data loader
-dynamic_slice_vmap = jax.vmap(jax.lax.dynamic_slice, in_axes=(None, 0, None))
-@jax.jit
-def get_batch(data, key):
-    ix = jax.random.randint(key, shape=(batch_size, 1), minval=0, maxval=len(data) - block_size)
-    x = dynamic_slice_vmap(data, ix, (block_size,))
-    y = dynamic_slice_vmap(data, ix + 1, (block_size,))
-    return x, y
+import numpy as np
+np.random.seed(seed)
+def get_batch(data):
+    ix = np.random.randint(size=(batch_size,), low=0, high=len(data) - block_size)
+    x = np.stack([data[i:i+block_size] for i in ix])
+    y = np.stack([data[i+1:i+block_size+1] for i in ix])
+    return jnp.array(x, device=jax.devices('cpu')[0]), jnp.array(y, device=jax.devices('cpu')[0])
 
 # Random number genration
 key = jax.random.key(seed)
@@ -88,15 +88,14 @@ def train_step(graphdef, state, xb, yb):
     return state
 
 for i in tqdm.trange(10000):
-    key, subkey = jax.random.split(key)
-    xb, yb = get_batch(train_data, subkey)
+    xb, yb = get_batch(train_data)
     state = train_step(graphdef, state, xb, yb)
 nnx.update((model, optimizer, metrics), state)
 
-train_xb, train_yb = get_batch(train_data, key)
+train_xb, train_yb = get_batch(train_data)
 print(loss_fn(model, train_xb, train_yb))
 
-val_xb, val_yb = get_batch(val_data, key)
+val_xb, val_yb = get_batch(val_data)
 print(loss_fn(model, val_xb, val_yb))
 
 # Save model

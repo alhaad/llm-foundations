@@ -1,8 +1,8 @@
 from flax import nnx
 import jax
 import jax.numpy as jnp
-import functools
 
+# TODO: This can be optmized by using a single matrix for query, key and value.
 class SelfAttentionHead(nnx.Module):
     def __init__(self, n_embed, head_dim, rngs: nnx.Rngs):
         self.query = nnx.Linear(n_embed, head_dim, rngs=rngs, use_bias=False)
@@ -22,7 +22,8 @@ class SelfAttentionHead(nnx.Module):
 
         v = self.value(x)
         return attn @ v
-    
+
+# TODO: This can be optmized by using a single matrix for all the heads.
 class MultiHeadAttention(nnx.Module):
     def __init__(self, n_embed, n_head, head_dim, rngs: nnx.Rngs):
         self.heads = [SelfAttentionHead(n_embed, head_dim, rngs) for _ in range(n_head)]
