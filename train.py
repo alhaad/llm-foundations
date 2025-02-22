@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import optax
 import tqdm
+from torch.utils.tensorboard import SummaryWriter
 
 # Hyperparameters
 seed = 1337
@@ -12,6 +13,8 @@ block_size = 8
 n_embed = 32
 n_head = 4
 n_blocks = 4
+num_iters = 10000
+log_every = 100
 
 
 # Prepare data
@@ -78,25 +81,34 @@ def loss_fn(model, x, targets):
 # The code below is a workaround for the slow training code above.
 optimizer = nnx.Optimizer(model, optax.adamw(1e-3))
 metrics = nnx.MultiMetric(loss=nnx.metrics.Average('loss'))
+writer = SummaryWriter("out/logs") # Tensorboard writer
 graphdef, state = nnx.split((model, optimizer, metrics))
 @jax.jit
 def train_step(graphdef, state, xb, yb):
     model, optimizer, metrics = nnx.merge(graphdef, state)
-    grads = (nnx.grad(loss_fn))(model, xb, yb)
+    loss, grads = (nnx.value_and_grad(loss_fn))(model, xb, yb)
+    metrics.update(loss=loss)
     optimizer.update(grads)
     _, state = nnx.split((model, optimizer, metrics))
     return state
 
-for i in tqdm.trange(10000):
+for i in tqdm.trange(num_iters):
     xb, yb = get_batch(train_data)
     state = train_step(graphdef, state, xb, yb)
+
+    if i % log_every == 0 or i == num_iters - 1:
+        model, _, metrics = nnx.merge(graphdef, state)
+        writer.add_scalar("Loss/train", np.asarray(metrics.compute()['loss']), i)
+
+        # Validation loss
+        val_xb, val_yb = get_batch(val_data)
+        val_loss = loss_fn(model, val_xb, val_yb)
+        writer.add_scalar("Loss/val", np.asarray(val_loss), i)
+
+        writer.flush()
 nnx.update((model, optimizer, metrics), state)
 
-train_xb, train_yb = get_batch(train_data)
-print(loss_fn(model, train_xb, train_yb))
-
-val_xb, val_yb = get_batch(val_data)
-print(loss_fn(model, val_xb, val_yb))
+writer.close()
 
 # Save model
 import orbax.checkpoint as ocp
